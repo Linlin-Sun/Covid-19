@@ -1,0 +1,228 @@
+---
+title: "2019 - 2020 Coronavirus outbreak"
+author: "Linlin Sun"
+date: "3/10/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+# Background
+
+The 2019-2020 coronavirus outbreak is an ongoing global outbreak of coronavirus disease 2019 that has been declared a Public Health Emergency of International Concern. It is caused by the SARS-CoV-2 coronavirus, first identified in Wuhan, Hubei, China. Over 100 countries and territories have been affected at the beginning of March 2020 with major outbreaks in central China, South Korea, Italy, Iran, France, and Germany. 
+
+## Data files
+
+I have been referring to [Johns Hopkins CSSE Coronavirus](https://gisanddata.maps.arcgis.com/apps/opsdashboard/index.html#/bda7594740fd40299423467b48e9ecf) for affected cases. From their website, they provided a [github link](https://github.com/CSSEGISandData/COVID-19) containing the data they are using to populate the website. 
+
+Including the library. 
+
+```{r, message = FALSE, results = 'hide', echo = FALSE}
+library(tidyverse)
+library(lubridate)
+library(matrixStats)
+options(digits=2)
+```
+
+Loading the data. 
+
+```{r, message = FALSE, results = 'hide', echo = FALSE}
+path <- getwd()
+covid_Confirmed_ts <- "data/covid_19_2020_03_19_Confirmed_TS.csv"
+covid_Deaths_ts <- "data/covid_19_2020_03_19_Deaths_TS.csv"
+covid_Recovered_ts <- "data/covid_19_2020_03_19_Recovered_TS.csv"
+c_ts <- read.csv(paste(path, covid_Confirmed_ts, sep = "/"), header = TRUE)
+c_ts_col_count <- length(colnames(c_ts))
+d_ts <- read.csv(paste(path, covid_Deaths_ts, sep = "/"), header = TRUE)
+d_ts_col_count <- length(colnames(d_ts))
+r_ts <- read.csv(paste(path, covid_Recovered_ts, sep = "/"), header = TRUE)
+r_ts_col_count <- length(colnames(r_ts))
+```
+
+Here is what the time series data look like. I am showing only partial columns due to space issue. 
+
+```{r, echo = FALSE}
+knitr::kable(c_ts[1:5, c(1, 2, (c_ts_col_count-5):c_ts_col_count)], 
+  caption = "Sample entries of csse covid-19 time series 03/19/2020")
+```
+
+I would like to just focus on US case growth. I woould like to have a plot to simply show how the total confirmed US cases grows each day. 
+
+I noticed that the data on 03/10/2020 have different format for Province.State column. They added entries to track the sum for each state. If we blindly sum up all rows, we will end up over counting the data. 
+
+So, I am going to wrangle the data as following:
+
+1. Process the data before and on 03/09/2020 the same way since for those days, we do not have extra entries. 
+2. Process the data on 03/10/2020 separately. I am using the new entries torwards the total count. This includes the Province.State fields without any comma or with the word "Princess" which come from the two cruise ships. 
+
+```{r, echo = FALSE}
+US_c_ts_0309 <- c_ts[1:52] %>% filter(Country.Region == "US") %>% 
+    gather(date, value, 5:52) %>%
+    group_by(Country.Region, date) %>% 
+    summarize(total = sum(value)) %>% 
+    ungroup() %>% 
+    mutate(Date_temp = str_replace(date, "X", "")) %>% 
+    mutate(Date = as.POSIXct(strptime(Date_temp, "%m.%d.%y")))
+
+delta <- c_ts_col_count - 53
+
+US_c_ts_after_0309 <- c_ts[, c(1,2,3,4, 53:(53+delta))] %>% filter(Country.Region == "US") %>% 
+    filter(!str_detect(Province.State, ",") | str_detect(Province.State, "Princess")) %>% 
+    gather(date, value, 5:(5+delta)) %>%
+    group_by(Country.Region, date) %>% 
+    summarize(total = sum(value)) %>% 
+    ungroup() %>% 
+    mutate(Date_temp = str_replace(date, "X", "")) %>% 
+    mutate(Date = as.POSIXct(strptime(Date_temp, "%m.%d.%y")))
+
+US_c_ts_after_0309
+
+US_c_ts <- rbind(US_c_ts_0309, US_c_ts_after_0309) %>% select(Country.Region, Date, total)
+today <- as.Date(max(US_c_ts$Date))
+US_c_ts
+```
+
+```{r, echo = FALSE}
+US_c_ts %>% 
+    ggplot(aes(Date, total)) +
+    geom_point() +
+    theme(axis.text.x = element_text(angle = 90)) +
+    ylab("Total Confirmed") +
+    xlab("Date") +
+    labs(title = "US Coronavirus Confirmed Cases from 1/22/2020 to 03/19/2020",
+         subtitle = "Data source: https://github.com/CSSEGISandData/COVID-19 provided by Johns Hopkins University")
+
+```
+
+
+```{r, echo = FALSE}
+
+Italy_c_ts <- c_ts %>% filter(Country.Region == "Italy")
+Italy_c_ts <- Italy_c_ts %>% gather(date, value, 5:c_ts_col_count) %>% 
+  mutate(Date_temp = str_replace(date, "X", "")) %>% 
+  mutate(Date = as.POSIXct(strptime(Date_temp, "%m.%d.%y"))) %>% 
+  select(Country.Region, Date, total = value)
+Italy_c_ts
+Italy_c_ts %>% filter(Date > "2020-02-15") %>% 
+  ggplot(aes(Date, total)) +
+    geom_point() +
+    theme(axis.text.x = element_text(angle = 90)) +
+    ylab("Total Confirmed") +
+    xlab("Date") +
+    scale_y_log10() +
+    labs(title = "Italy Coronavirus Confirmed Cases from 1/22/2020 to 03/19/2020",
+         subtitle = "Data source: https://github.com/CSSEGISandData/COVID-19 provided by Johns Hopkins University")
+
+
+```
+
+```{r, echo = FALSE}
+md_padded <- function(mydate){
+  paste(str_pad(month(mydate), width = 2, side = "left", pad = "0"), "-", 
+        str_pad(day(mydate), width = 2, side = "left", pad = "0"), sep = ""
+        )
+}
+
+max_date_shown_Italy <- today - 5
+max_date_shown_Italy
+US_day_0 <- as.Date("2020-03-04")
+Italy_day_0 <- as.Date("2020-02-22")
+days_diff <- as.integer(US_day_0 - Italy_day_0)
+Italy_c_ts <- Italy_c_ts %>% mutate(Day = as.Date(Date) - Italy_day_0) %>% filter(Date <= max_date_shown_Italy)
+US_c_ts <- US_c_ts %>% mutate(Day = as.Date(Date) - US_day_0)
+
+# str(Italy_c_ts)
+# str(US_c_ts)
+
+stop_1 <- as.integer(as.Date("2020-03-13") - US_day_0)
+stop_1
+stop_2 <- as.integer(today - US_day_0)
+stop_2
+
+stop_3 <- as.integer(max_date_shown_Italy - Italy_day_0)
+stop_3
+
+day_0_label <- paste("0\nUS", md_padded(US_day_0), "\nItaly", md_padded(Italy_day_0))
+day_0_label
+day_school_closed_label <- paste(as.character(stop_1), "\nUS 03-13\nGA school\nclosed", sep = "")
+day_school_closed_label
+day_today_label <- paste(as.character(stop_2), "\nUS", md_padded(today), "\nItaly", md_padded(today - 11))
+day_today_label
+day_last_label <- paste(as.character(stop_3), "\n\nItaly", md_padded(max_date_shown_Italy))
+day_last_label
+
+y_limit <- Italy_c_ts[Italy_c_ts$Date == (Italy_day_0 + stop_3), "total"]
+y_limit
+pdf_filename <- paste("US-Italy-", as.character(today), ".pdf", sep = "")
+# pdf(pdf_filename, width = 8, height = 6)
+
+rbind(Italy_c_ts, US_c_ts) %>% filter(Day >= 0) %>% 
+  ggplot(aes(Day, total, fill = Country.Region)) + 
+  geom_bar(stat = "identity", width = 0.5, position = "dodge") +
+  theme(legend.position = "top", legend.title = element_blank()) +
+  scale_fill_manual(values = c("blue", "red")) +
+  scale_x_continuous(breaks = seq(0, stop_3),
+      labels = c(day_0_label, 1:(stop_1 - 1), day_school_closed_label, 
+                 (stop_1 + 1):(stop_2 - 1), day_today_label, 
+                 (stop_2 + 1):(stop_3 - 1), day_last_label)) +
+  scale_y_continuous(breaks = seq(0, y_limit, 2000)) + 
+  labs(title = "Covid-19 Confirmed cases Italy vs US (Year 2020)", 
+       subtitle = "Trying to see if the growth patterns are similar between Italy and US. \nDay 0 were picked when both countries have similar confirmed cases.",
+       caption = "Data Source: https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data/csse_covid_19_time_series",
+       y = "Total Confirmed")
+
+# dev.off()
+
+```
+
+```{r, echo = FALSE}
+# US_c <- US_c_ts_after_0309 %>% filter(Date == today) %>% pull(total)
+# non_US_c <- c_ts %>% filter(!Country.Region == "US") %>% select(c(c_ts_col_count)) %>% sum()
+# China_c <- c_ts %>% filter(Country.Region == "China") %>% select(c(c_ts_col_count)) %>% sum()
+# non_China_c <- non_US_c - China_c + US_c
+# 
+# China_d <- d_ts %>% filter(Country.Region == "China") %>% select(c(d_ts_col_count)) %>% sum()
+# non_China_d <- d_ts %>% filter(!Country.Region == "China") %>% select(c(d_ts_col_count)) %>% sum()
+# 
+# world_d_r <- (China_d + non_China_d)/(non_China_c + China_c)
+# cat("World Deaths Rate = ", world_d_r, "\n")
+# non_China_d_r <- non_China_d/non_China_c
+# cat("Non China Deaths Rate = ", non_China_d_r, "\n")
+# China_d_r <- China_d/China_c
+# cat("China Deaths Rate = ", China_d_r, "\n")
+# 
+# d_r <- data.frame(Name = c("World", "Non China", "China"),
+#                   Deaths = c(world_d_r, non_China_d_r, China_d_r))
+# knitr::kable(d_r, caption = "Rates Summary")
+
+```
+
+```{r, echo = FALSE}
+c_by_country <- c_ts %>% filter(!Country.Region == "US" | (Country.Region == "US" & !str_detect(Province.State, ","))) %>% 
+  select(Country.Region, num = c(c_ts_col_count)) %>%
+  group_by(Country.Region) %>% summarize(Confirmed = sum(num)) 
+d_by_country <- d_ts %>% filter(!Country.Region == "US" | (Country.Region == "US" & !str_detect(Province.State, ","))) %>% 
+  select(Country.Region, num = c(d_ts_col_count)) %>% 
+  group_by(Country.Region) %>% summarize(Deaths = sum(num)) 
+r_by_country <- r_ts %>% filter(!Country.Region == "US" | (Country.Region == "US" & !str_detect(Province.State, ","))) %>% 
+  select(Country.Region, num = c(r_ts_col_count)) %>% 
+  group_by(Country.Region) %>% summarize(Recovered = sum(num)) 
+
+all_by_country <- inner_join(inner_join(c_by_country, d_by_country, by = "Country.Region"), r_by_country, by = "Country.Region")
+
+all_by_country <- all_by_country %>% 
+  mutate(Death.Percent = (Deaths/Confirmed)*100, Recover.Percent = (Recovered/Confirmed)*100) %>% 
+  arrange(desc(Confirmed)) %>% slice(1:15)
+
+knitr::kable(all_by_country, caption = "World Covid-19 Summary 03/19/2020")
+```
+
+
+## So far, it seems that US confirmed cases grows faster than Italy. It can be explained by that US has much bigger population base. 
+Italy has the highest death rate. 
+Germany has high confirmed case but their death rate is pretty low. 
+
+
+
+
+
