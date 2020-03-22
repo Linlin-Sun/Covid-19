@@ -21,6 +21,7 @@ Including the library.
 library(tidyverse)
 library(lubridate)
 library(matrixStats)
+library(kableExtra)
 options(digits=2)
 ```
 
@@ -28,9 +29,9 @@ Loading the data.
 
 ```{r, message = FALSE, results = 'hide', echo = FALSE}
 path <- getwd()
-covid_Confirmed_ts <- "data/covid_19_2020_03_19_Confirmed_TS.csv"
-covid_Deaths_ts <- "data/covid_19_2020_03_19_Deaths_TS.csv"
-covid_Recovered_ts <- "data/covid_19_2020_03_19_Recovered_TS.csv"
+covid_Confirmed_ts <- "data/covid_19_2020_03_21_Confirmed_TS.csv"
+covid_Deaths_ts <- "data/covid_19_2020_03_21_Deaths_TS.csv"
+covid_Recovered_ts <- "data/covid_19_2020_03_21_Recovered_TS.csv"
 c_ts <- read.csv(paste(path, covid_Confirmed_ts, sep = "/"), header = TRUE)
 c_ts_col_count <- length(colnames(c_ts))
 d_ts <- read.csv(paste(path, covid_Deaths_ts, sep = "/"), header = TRUE)
@@ -43,7 +44,7 @@ Here is what the time series data look like. I am showing only partial columns d
 
 ```{r, echo = FALSE}
 knitr::kable(c_ts[1:5, c(1, 2, (c_ts_col_count-5):c_ts_col_count)], 
-  caption = "Sample entries of csse covid-19 time series 03/19/2020")
+  caption = "Sample entries of csse covid-19 time series 03/21/2020")
 ```
 
 I would like to just focus on US case growth. I woould like to have a plot to simply show how the total confirmed US cases grows each day. 
@@ -89,7 +90,7 @@ US_c_ts %>%
     theme(axis.text.x = element_text(angle = 90)) +
     ylab("Total Confirmed") +
     xlab("Date") +
-    labs(title = "US Coronavirus Confirmed Cases from 1/22/2020 to 03/19/2020",
+    labs(title = "US Coronavirus Confirmed Cases from 1/22/2020 to 03/21/2020",
          subtitle = "Data source: https://github.com/CSSEGISandData/COVID-19 provided by Johns Hopkins University")
 
 ```
@@ -110,7 +111,7 @@ Italy_c_ts %>% filter(Date > "2020-02-15") %>%
     ylab("Total Confirmed") +
     xlab("Date") +
     scale_y_log10() +
-    labs(title = "Italy Coronavirus Confirmed Cases from 1/22/2020 to 03/19/2020",
+    labs(title = "Italy Coronavirus Confirmed Cases from 1/22/2020 to 03/21/2020",
          subtitle = "Data source: https://github.com/CSSEGISandData/COVID-19 provided by Johns Hopkins University")
 
 
@@ -208,19 +209,61 @@ r_by_country <- r_ts %>% filter(!Country.Region == "US" | (Country.Region == "US
   select(Country.Region, num = c(r_ts_col_count)) %>% 
   group_by(Country.Region) %>% summarize(Recovered = sum(num)) 
 
-all_by_country <- inner_join(inner_join(c_by_country, d_by_country, by = "Country.Region"), r_by_country, by = "Country.Region")
+all_by_country <- inner_join(inner_join(c_by_country, d_by_country, by = "Country.Region"), r_by_country, by = "Country.Region") %>% mutate(Country.Region = as.character(Country.Region))
 
-all_by_country <- all_by_country %>% 
-  mutate(Death.Percent = (Deaths/Confirmed)*100, Recover.Percent = (Recovered/Confirmed)*100) %>% 
-  arrange(desc(Confirmed)) %>% slice(1:15)
+source("WorldPopulation.R")
+wp <- getWorldPopulation()
+wppd <- wp %>% 
+  mutate(Density = str_replace_all(Density, ",", "")) %>% 
+  mutate(Density = as.numeric(Density)) %>% 
+  mutate(Population = str_replace_all(Population, ",", "")) %>% 
+  mutate(Population = as.numeric(Population)) %>% 
+  select(Country.Region, Density, Population)
 
-knitr::kable(all_by_country, caption = "World Covid-19 Summary 03/19/2020")
+all <- left_join(all_by_country, wppd, by = "Country.Region")
+
+# sapply(all, function(col) {sum(is.na(col))})
+# all[is.na(all$Density),]
+# five countries do not get a matching density
+# There is a row for Cape Verde and Cabo Verde, which are the same country
+all$Density[all$Country.Region == "Cape Verde"] = wppd$Density[wppd$Country.Region == "Cabo Verde"]
+all$Population[all$Country.Region == "Cape Verde"] = wppd$Population[wppd$Country.Region == "Cabo Verde"]
+# There are two Congo entries in covid-19 data, one congo entry from the world population data
+all$Density[str_detect(all$Country.Region, "Congo")] = wppd$Density[wppd$Country.Region == "Congo"]
+all$Population[str_detect(all$Country.Region, "Congo")] = wppd$Population[wppd$Country.Region == "Congo"]/2
+# There is no entries for Kosovo in world population data. Cruise ship is not a real country. 
+all$Density[str_detect(all$Country.Region, "Cruise Ship")] = 100
+all$Population[str_detect(all$Country.Region, "Cruise Ship")] = 2000
+all$Density[str_detect(all$Country.Region, "Kosovo")] = 1810366/10890
+all$Population[str_detect(all$Country.Region, "Kosovo")] = 1810366
+
+all <- all %>% 
+  mutate("D/C %" = (Deaths/Confirmed)*100, "R/C %" = (Recovered/Confirmed)*100) %>% 
+  mutate("C/Population" = (Confirmed/Population)*10000, "D/Population" = (Deaths/Population)*10000, "R/Popluation" = (Recovered/Population)*10000) %>%
+  mutate("D/C % by Density" = `D/C %`/Density, "R/C % by Density" = `R/C %`/Density) %>% 
+  arrange(desc(Confirmed)) %>% slice(1:50)
+
+# knitr::kable(all, 
+#              caption = "World Covid-19 Summary 03/21/2020\n C/Population, D/Population, R/Population are per 10,000 people")
 ```
 
 
-## So far, it seems that US confirmed cases grows faster than Italy. It can be explained by that US has much bigger population base. 
-Italy has the highest death rate. 
-Germany has high confirmed case but their death rate is pretty low. 
+```{r}
+
+knitr::kable(all,
+             caption = "World Covid-19 Summary 03/21/2020. C/Population, D/Population, R/Population are per 10,000 people",
+             format="latex", booktabs=TRUE) %>%
+  kable_styling(latex_options="scale_down")
+
+
+```
+
+
+## Conclusion from this table
+1. If just comparing number of Confirmed/Deaths/Recovered cases, China has the highest confirmed case. Italy has the highest 
+Deaths/Confirmed rate (D/C %). 
+2. Adding consideration of the countries' population, Italy has the highest Confirmed cases per 10,000 people. 
+2. Adding the consideration of population density, Iran has the highest Deaths/Confirmed cases by density. 
 
 
 
