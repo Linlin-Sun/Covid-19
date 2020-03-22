@@ -1,40 +1,12 @@
----
-title: "2019 - 2020 Coronavirus outbreak"
-author: "Linlin Sun"
-date: "3/10/2020"
-output:
-  pdf_document: default
-  html_document: default
----
-
-# Background
-
-The 2019-2020 coronavirus outbreak is an ongoing global outbreak of coronavirus disease 2019 that has been declared a Public Health Emergency of International Concern. It is caused by the SARS-CoV-2 coronavirus, first identified in Wuhan, Hubei, China. Over 100 countries and territories have been affected at the beginning of March 2020 with major outbreaks in central China, South Korea, Italy, Iran, France, and Germany. 
-
-## Data files
-
-I have been referring to [Johns Hopkins CSSE Coronavirus](
-https://gisanddata.maps.arcgis.com/apps/opsdashboard/index.html#/bda7594740fd40299423467b48e9ecf)
-
-https://gisanddata.maps.arcgis.com/apps/opsdashboard/index.html#/bda7594740fd40299423467b48e9ecf 
-for affected cases. From their website, they provided a [github link](https://github.com/CSSEGISandData/COVID-19) containing the data they are using to populate the website. 
-
-I got the world population information from [https://www.worldometers.info/world-population/population-by-country/](
-https://www.worldometers.info/world-population/population-by-country/)
-
-Including the library. 
-
-```{r, message = FALSE, results = 'hide'}
+## ---- message = FALSE, results = 'hide'---------------------------------------------------------------------------------------
 library(tidyverse)
 library(lubridate)
 library(matrixStats)
 library(kableExtra)
 options(digits=2)
-```
 
-Loading the data. 
 
-```{r, message = FALSE, results = 'hide'}
+## ---- message = FALSE, results = 'hide'---------------------------------------------------------------------------------------
 path <- getwd()
 covid_Confirmed_ts <- "data/covid_19_2020_03_21_Confirmed_TS.csv"
 covid_Deaths_ts <- "data/covid_19_2020_03_21_Deaths_TS.csv"
@@ -45,25 +17,14 @@ d_ts <- read.csv(paste(path, covid_Deaths_ts, sep = "/"), header = TRUE)
 d_ts_col_count <- length(colnames(d_ts))
 r_ts <- read.csv(paste(path, covid_Recovered_ts, sep = "/"), header = TRUE)
 r_ts_col_count <- length(colnames(r_ts))
-```
 
-Here is what the time series data look like. I am showing only partial columns due to space issue. 
 
-```{r, echo = FALSE}
+## ---- echo = FALSE------------------------------------------------------------------------------------------------------------
 knitr::kable(c_ts[1:5, c(1, 2, (c_ts_col_count-5):c_ts_col_count)], 
   caption = "Sample entries of csse covid-19 time series 03/21/2020")
-```
 
-I would like to just focus on US case growth. I woould like to have a plot to simply show how the total confirmed US cases grows each day. 
 
-I noticed that the data on 03/10/2020 have different format for Province.State column. They added entries to track the sum for each state. If we blindly sum up all rows, we will end up over counting the data. 
-
-So, I am going to wrangle the data as following:
-
-1. Process the data before and on 03/09/2020 the same way since for those days, we do not have extra entries. 
-2. Process the data on 03/10/2020 separately. I am using the new entries torwards the total count. This includes the Province.State fields without any comma or with the word "Princess" which come from the two cruise ships. 
-
-```{r}
+## -----------------------------------------------------------------------------------------------------------------------------
 US_c_ts_0309 <- c_ts[1:52] %>% filter(Country.Region == "US") %>% 
     gather(date, value, 5:52) %>%
     group_by(Country.Region, date) %>% 
@@ -88,9 +49,9 @@ US_c_ts_after_0309
 US_c_ts <- rbind(US_c_ts_0309, US_c_ts_after_0309) %>% select(Country.Region, Date, total)
 today <- as.Date(max(US_c_ts$Date))
 US_c_ts
-```
 
-```{r}
+
+## -----------------------------------------------------------------------------------------------------------------------------
 US_c_ts %>% 
     ggplot(aes(Date, total)) +
     geom_point() +
@@ -100,10 +61,9 @@ US_c_ts %>%
     labs(title = "US Coronavirus Confirmed Cases from 1/22/2020 to 03/21/2020",
          subtitle = "Data source: https://github.com/CSSEGISandData/COVID-19 provided by Johns Hopkins University")
 
-```
 
 
-```{r}
+## -----------------------------------------------------------------------------------------------------------------------------
 
 Italy_c_ts <- c_ts %>% filter(Country.Region == "Italy")
 Italy_c_ts <- Italy_c_ts %>% gather(date, value, 5:c_ts_col_count) %>% 
@@ -122,9 +82,9 @@ Italy_c_ts %>% filter(Date > "2020-02-15") %>%
       subtitle = "Data source: https://github.com/CSSEGISandData/COVID-19 provided by Johns Hopkins U")
 
 
-```
 
-```{r}
+
+## -----------------------------------------------------------------------------------------------------------------------------
 md_padded <- function(mydate){
   paste(str_pad(month(mydate), width = 2, side = "left", pad = "0"), "-", 
         str_pad(day(mydate), width = 2, side = "left", pad = "0"), sep = ""
@@ -177,10 +137,9 @@ rbind(Italy_c_ts, US_c_ts) %>% filter(Day >= 0) %>%
        y = "Total Confirmed")
 # dev.off()
 
-```
 
 
-```{r}
+## -----------------------------------------------------------------------------------------------------------------------------
 c_by_country <- c_ts %>% 
   filter(!Country.Region == "US" | (Country.Region == "US" & !str_detect(Province.State, ","))) %>% 
   select(Country.Region, num = c(c_ts_col_count)) %>%
@@ -200,14 +159,14 @@ all_by_country <-
   inner_join(inner_join(c_by_country, d_by_country, by = "Country.Region"), 
              r_by_country, by = "Country.Region") %>% 
   mutate(Country.Region = as.character(Country.Region))
-```
 
-```{r, message = FALSE}
+
+## ---- message = FALSE---------------------------------------------------------------------------------------------------------
 source("WorldPopulation.R")
 wp <- getWorldPopulation()
-```
 
-```{r}
+
+## -----------------------------------------------------------------------------------------------------------------------------
 wppd <- wp %>% 
   mutate(Density = str_replace_all(Density, ",", "")) %>% 
   mutate(Density = as.numeric(Density)) %>% 
@@ -247,34 +206,14 @@ all <- all %>%
   mutate("D/C % by Density" = `D/C %`/Density) %>% 
   arrange(desc(Confirmed)) %>% slice(1:20)
 
-```
 
 
-```{r}
+## -----------------------------------------------------------------------------------------------------------------------------
 
 knitr::kable(all,
   caption = "World Covid-19 Summary 03/21/2020. C/Population, D/Population, R/Population are per 10,000 people",
   format="latex", booktabs=TRUE) %>%
   kable_styling(latex_options="scale_down")
-
-
-```
-
-
-## Conclusion from this table
-On websites, we normally see the numbers for Confirmed, Deaths, Recovered. Some places might show the Death rate which is calculated as Deaths/Confirmed. 
-
-I added population, density and median age of the countries to the table. I calculated the number of cases (Confirmed, Deaths) divided by population multipled by 10,000. So C/Population and D/Population columns shows number of cases per 10,000 people. 
-
-"D/C by Density" is calculated by Deaths/Confirmed divided by country density. (Density here is number of people per square km). So this rate removes the density factor. If a country has higher density, that makes the virus to be transmitted more easily. 
-
-
-1. If not considering the population and density factors, China has the highest confirmed case. Italy has the highest 
-Deaths/Confirmed rate (D/C %). 
-2. Adding consideration of the countries' population, Italy has the highest Confirmed cases per 10,000 people. 
-3. Adding the consideration of population density, Iran has the highest Deaths/Confirmed by density. 
-
-
 
 
 
