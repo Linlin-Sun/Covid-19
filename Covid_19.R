@@ -204,7 +204,7 @@ all <- all %>%
   mutate("C/Population" = (Confirmed/Population)*10000, 
          "D/Population" = (Deaths/Population)*10000) %>%
   mutate("D/C % by Density" = `D/C %`/Density) %>% 
-  arrange(desc(Confirmed)) %>% slice(1:20)
+  arrange(desc(Confirmed)) %>% slice(1:15)
 
 
 

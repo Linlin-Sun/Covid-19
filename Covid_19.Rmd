@@ -11,6 +11,12 @@ output:
 
 The 2019-2020 coronavirus outbreak is an ongoing global outbreak of coronavirus disease 2019 that has been declared a Public Health Emergency of International Concern. It is caused by the SARS-CoV-2 coronavirus, first identified in Wuhan, Hubei, China. Over 100 countries and territories have been affected at the beginning of March 2020 with major outbreaks in central China, South Korea, Italy, Iran, France, and Germany. 
 
+# Background of the author. 
+As a newbie in the data science world, I would like to use the coronavirus data to practice my data wrangling skills. 
+As a Chinese-American, I have spent more than half of my life here in US than in China. I have paid attention to the news in China while Wuhan and other places in China were experiencing the covid-19 spreading. Now, I am experiencing covid-19 spread in US. Beside trying my best to do the social distancing, I would like to make my small portion of contribution to the covid-19 analysis. 
+
+I am hoping we will get through this soon and wish the best for everyone!
+
 ## Data files
 
 I have been referring to [Johns Hopkins CSSE Coronavirus](
@@ -245,7 +251,7 @@ all <- all %>%
   mutate("C/Population" = (Confirmed/Population)*10000, 
          "D/Population" = (Deaths/Population)*10000) %>%
   mutate("D/C % by Density" = `D/C %`/Density) %>% 
-  arrange(desc(Confirmed)) %>% slice(1:20)
+  arrange(desc(Confirmed)) %>% slice(1:15)
 
 ```
 
@@ -261,7 +267,7 @@ knitr::kable(all,
 ```
 
 
-## Conclusion from this table
+## Below are my personal opinion from this table. I could be wrong. Please let me know what you think. I will really appreciate it. 
 On websites, we normally see the numbers for Confirmed, Deaths, Recovered. Some places might show the Death rate which is calculated as Deaths/Confirmed. 
 
 I added population, density and median age of the countries to the table. I calculated the number of cases (Confirmed, Deaths) divided by population multipled by 10,000. So C/Population and D/Population columns shows number of cases per 10,000 people. 
@@ -271,8 +277,14 @@ I added population, density and median age of the countries to the table. I calc
 
 1. If not considering the population and density factors, China has the highest confirmed case. Italy has the highest 
 Deaths/Confirmed rate (D/C %). 
-2. Adding consideration of the countries' population, Italy has the highest Confirmed cases per 10,000 people. 
-3. Adding the consideration of population density, Iran has the highest Deaths/Confirmed by density. 
+
+2. Adding consideration of the countries' population, Italy has the highest Confirmed and Death cases per 10,000 people. 
+
+3. Adding the consideration of population density, Iran has relative high Deaths/Confirmed by density. Italy is not on the top of this list.
+
+4. For most of the countries which have higher confirmed cases, most of them have D/C % by Density within 0.05. This means to me that the virus transmission seems to be similar across all countries. 
+
+5. There can be other factors that contribute to D/C % by Density. If a country has more people older than a certain age, it will be more affected since covid-19 has much worse impact on older people. Italy is a great exmaple. Better medical facilities will have positive effect on this. 
 
 
 
