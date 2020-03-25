@@ -1,5 +1,5 @@
 ---
-title: "2019 - 2020 Coronavirus outbreak"
+title: "2019 - 2020 Covid-19 outbreak"
 author: "Linlin Sun"
 date: "3/10/2020"
 output:
@@ -9,17 +9,17 @@ output:
 
 # Background
 
-The 2019-2020 coronavirus outbreak is an ongoing global outbreak of coronavirus disease 2019 that has been declared a Public Health Emergency of International Concern. It is caused by the SARS-CoV-2 coronavirus, first identified in Wuhan, Hubei, China. Over 100 countries and territories have been affected at the beginning of March 2020 with major outbreaks in central China, South Korea, Italy, Iran, France, and Germany. 
+The 2019-2020 Covid-19 outbreak is an ongoing global outbreak of Covid-19 disease 2019 that has been declared a Public Health Emergency of International Concern. It is caused by the SARS-CoV-2 Covid-19, first identified in Wuhan, Hubei, China. Over 100 countries and territories have been affected at the beginning of March 2020 with major outbreaks in central China, South Korea, Italy, Iran, France, and Germany. 
 
 # Background of the author. 
-As a newbie in the data science world, I would like to use the coronavirus data to practice my data wrangling skills. 
+As a newbie in the data science world, I would like to use the Covid-19 data to practice my data wrangling skills. 
 As a Chinese-American, I have spent more than half of my life here in US than in China. I have paid attention to the news in China while Wuhan and other places in China were experiencing the covid-19 spreading. Now, I am experiencing covid-19 spread in US. Beside trying my best to do the social distancing, I would like to make my small portion of contribution to the covid-19 analysis. 
 
 I am hoping we will get through this soon and wish the best for everyone!
 
 ## Data files
 
-I have been referring to [Johns Hopkins CSSE Coronavirus](
+I have been referring to [Johns Hopkins CSSE Covid-19](
 https://gisanddata.maps.arcgis.com/apps/opsdashboard/index.html#/bda7594740fd40299423467b48e9ecf)
 
 https://gisanddata.maps.arcgis.com/apps/opsdashboard/index.html#/bda7594740fd40299423467b48e9ecf 
@@ -100,7 +100,7 @@ today <- max(confirmed$Date)
 
 ```{r}
 select_top <- 15
-top_confirmed <- confirmed %>% filter(Date == today) %>% 
+top_confirmed_countries <- confirmed %>% filter(Date == today) %>% 
     arrange(desc(Confirmed)) %>% 
     top_n(select_top, Confirmed) %>% 
     mutate(Country.Region = as.character(Country.Region)) %>% 
@@ -108,20 +108,51 @@ top_confirmed <- confirmed %>% filter(Date == today) %>%
 
 # confirmed %>% filter(Country.Region == "United Kingdom")
 
-confirmed %>% filter(Country.Region %in% top_confirmed) %>% 
+confirmed %>% filter(Country.Region %in% top_confirmed_countries) %>% 
     ggplot(aes(Date, Confirmed, color = Country.Region)) +
-    geom_point() + 
-    geom_line()
+    geom_point(size = 0.1) + 
+    geom_line() +
+    theme(plot.title = element_text(hjust = 0.5),
+          plot.subtitle = element_text(hjust = 0.5)) +
+    labs(title = paste("Timeline for Covid-19 Confirmed Cases as of", today, sep = " "),
+         subtitle = "Showing countries with top 15 most confirmed cases in the world", 
+         x = "Date", 
+         y = "Confirmed case count",
+         caption = "datasource: https://github.com/CSSEGISandData/COVID-19",
+         color = "Country")
+```
 
+
+```{r}
 
 # Day1 plot
-confirmed_day1 <- confirmed %>% filter(Confirmed >= 100) %>% group_by(Country.Region) %>% 
+day1_count <- 100
+
+confirmed_day1 <- confirmed %>% filter(Confirmed >= day1_count) %>% group_by(Country.Region) %>% 
     arrange(Confirmed) %>% mutate(Day = row_number()) %>% ungroup()
 
-confirmed_day1 %>% filter(Country.Region %in% top_confirmed) %>%
+x_lim_max <- confirmed_day1 %>% filter(Country.Region %in% top_confirmed_countries) %>% 
+  filter(Country.Region != top_confirmed_countries[1]) %>% 
+  arrange(desc(Day)) %>% 
+  select(Day) %>% 
+  summarize(max_day = max(Day)) %>% 
+  pull(max_day)
+
+  
+confirmed_day1 %>% filter(Country.Region %in% top_confirmed_countries) %>%
     ggplot(aes(Day, Confirmed, color = Country.Region)) +
-    geom_point() + 
-    geom_line()
+    geom_point(size = 0.1) + 
+    geom_line() +
+    theme(plot.title = element_text(hjust = 0.5),
+          plot.subtitle = element_text(hjust = 0.5)) +
+    xlim(1, x_lim_max) +
+    labs(title = paste("Timeline for Covid-19 Confirmed Cases as of", today, sep = " "),
+         subtitle = "Showing countries with top 15 most confirmed cases in the world\nDay 1 starts with around 100 case count for each country", 
+         x = "Day", 
+         y = "Confirmed case count",
+         caption = "datasource: https://github.com/CSSEGISandData/COVID-19",
+         color = "Country")
+
 
 
 ```
