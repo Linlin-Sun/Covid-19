@@ -32,6 +32,7 @@ Including the library.
 
 ```{r, message = FALSE, results = 'hide'}
 library(tidyverse)
+library(gridExtra)
 library(lubridate)
 library(matrixStats)
 library(kableExtra)
@@ -99,7 +100,7 @@ today <- max(confirmed$Date)
 ```
 
 ```{r}
-select_top <- 15
+select_top <- 5
 top_confirmed_countries <- confirmed %>% filter(Date == today) %>% 
     arrange(desc(Confirmed)) %>% 
     top_n(select_top, Confirmed) %>% 
@@ -110,12 +111,11 @@ top_confirmed_countries <- confirmed %>% filter(Date == today) %>%
 
 confirmed %>% filter(Country.Region %in% top_confirmed_countries) %>% 
     ggplot(aes(Date, Confirmed, color = Country.Region)) +
-    geom_point(size = 0.1) + 
     geom_line() +
     theme(plot.title = element_text(hjust = 0.5),
           plot.subtitle = element_text(hjust = 0.5)) +
     labs(title = paste("Timeline for Covid-19 Confirmed Cases as of", today, sep = " "),
-         subtitle = "Showing countries with top 15 most confirmed cases in the world", 
+         subtitle = paste("Showing countries with top", select_top, "most confirmed cases in the world", sep = " "), 
          x = "Date", 
          y = "Confirmed case count",
          caption = "datasource: https://github.com/CSSEGISandData/COVID-19",
@@ -139,20 +139,26 @@ x_lim_max <- confirmed_day1 %>% filter(Country.Region %in% top_confirmed_countri
   pull(max_day)
 
   
-confirmed_day1 %>% filter(Country.Region %in% top_confirmed_countries) %>%
+p_day1_base <- confirmed_day1 %>% filter(Country.Region %in% top_confirmed_countries) %>%
     ggplot(aes(Day, Confirmed, color = Country.Region)) +
-    geom_point(size = 0.1) + 
     geom_line() +
     theme(plot.title = element_text(hjust = 0.5),
           plot.subtitle = element_text(hjust = 0.5)) +
-    xlim(1, x_lim_max) +
-    labs(title = paste("Timeline for Covid-19 Confirmed Cases as of", today, sep = " "),
-         subtitle = "Showing countries with top 15 most confirmed cases in the world\nDay 1 starts with around 100 case count for each country", 
+    xlim(1, x_lim_max)
+
+
+p_day1 <- p_day1_base + 
+  labs(title = paste("Timeline for Covid-19 Confirmed Cases as of", today, sep = " "),
+         subtitle = paste("Showing countries with top", select_top, "most confirmed cases in the world\nDay 1 starts with around 100 case count for each country", sep = " "), 
          x = "Day", 
          y = "Confirmed case count",
          caption = "datasource: https://github.com/CSSEGISandData/COVID-19",
          color = "Country")
 
+p_day1
+
+p_day1_log2 <- p_day1_base + scale_y_continuous(trans = "log2") + theme(legend.position = "none")
+grid.arrange(p_day1_base + theme(legend.position = "none"), p_day1_log2, ncol = 2)
 
 
 ```
