@@ -23,15 +23,9 @@ getWorldPopulation<- function() {
     world_population$Country.Region <- 
         ifelse(world_population$Country.Region == "South Korea", "Korea, South", world_population$Country.Region)
     world_population$Country.Region <- 
-        ifelse(world_population$Country.Region == "Bahamas", "Bahamas, The", world_population$Country.Region)
-    world_population$Country.Region <- 
         ifelse(world_population$Country.Region == "Côte d'Ivoire", "Cote d'Ivoire", world_population$Country.Region)
     world_population$Country.Region <- 
         ifelse(world_population$Country.Region == "Czech Republic (Czechia)", "Czechia", world_population$Country.Region)
-    world_population$Country.Region <- 
-        ifelse(world_population$Country.Region == "Timor-Leste", "East Timor", world_population$Country.Region)
-    world_population$Country.Region <- 
-        ifelse(world_population$Country.Region == "Gambia", "Gambia, The", world_population$Country.Region)
     world_population$Country.Region <- 
         ifelse(world_population$Country.Region == "Taiwan", "Taiwan*", world_population$Country.Region)
     world_population$Country.Region <- 
