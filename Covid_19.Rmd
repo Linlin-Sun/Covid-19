@@ -62,6 +62,19 @@ d_ts <- read.csv(paste(path, covid_Deaths_ts, sep = "/"), header = TRUE)
 d_ts_col_count <- length(colnames(d_ts))
 ```
 
+Set some constant variables.
+
+```{r}
+select_top <- 15
+
+day0_count <- 100
+
+colors <- c("aquamarine2", "brown", "blue", "orange", "chartreuse", 
+            "darkgoldenrod1", "cyan", "darkgreen", "yellow", "darkseagreen",
+            "grey39", "deepskyblue4", "darkorchid", "pink2", "red1")
+
+```
+
 First, I get the confirmed and deaths data ready and combine them. 
 
 
@@ -93,7 +106,7 @@ today <- max(confirmed$Date)
 I would like to plot the time series data for a few countries with the most confirmed cases. 
 
 ```{r, , message = FALSE}
-select_top <- 5
+
 top_confirmed_countries <- confirmed %>% filter(Date == today) %>% 
     arrange(desc(Confirmed)) %>% 
     top_n(select_top, Confirmed) %>% 
@@ -107,6 +120,7 @@ confirmed %>% filter(Country.Region %in% top_confirmed_countries) %>%
     geom_line() +
     theme(plot.title = element_text(hjust = 0.5),
           plot.subtitle = element_text(hjust = 0.5)) +
+    scale_color_manual(values = colors) +
     labs(title = paste("Timeline for Covid-19 Confirmed Cases as of", today, sep = " "),
          subtitle = paste("Showing countries with top", select_top, 
                           "most confirmed cases in the world", sep = " "), 
@@ -123,7 +137,7 @@ This way, it is easier to do visual comparison among the countries.
 ```{r}
 
 # day0 plot
-day0_count <- 100
+
 
 confirmed_day0 <- confirmed %>% filter(Confirmed >= day0_count) %>% group_by(Country.Region) %>% 
     arrange(Confirmed) %>% mutate(Day = row_number() - 1) %>% ungroup()
@@ -141,7 +155,8 @@ p_day0_base <- confirmed_day0 %>% filter(Country.Region %in% top_confirmed_count
     geom_line() +
     theme(plot.title = element_text(hjust = 0.5),
           plot.subtitle = element_text(hjust = 0.5)) +
-    scale_x_continuous(breaks = seq(0, x_lim_max, 5), lim = c(0, x_lim_max))
+    scale_x_continuous(breaks = seq(0, x_lim_max, 5), lim = c(0, x_lim_max)) +
+    scale_color_manual(values = colors)
 p_day0 <- p_day0_base +
       labs(title = paste("Timeline for Covid-19 Confirmed Cases as of", today, sep = " "),
            subtitle = paste("Showing countries with top", select_top, 
@@ -227,9 +242,9 @@ all <- all %>%
     mutate("C/Population" = (Confirmed/Population)*10000, 
            "D/Population" = (Deaths/Population)*10000) %>%
     mutate("D/C % by Density" = `D/C %`/Density) %>% 
-    arrange(desc(Confirmed)) %>% slice(1:15)
+    arrange(desc(Confirmed))
 
-knitr::kable(all,
+knitr::kable(slice(all, 1:select_top),
   caption = paste("World Covid-19 Summary", today, "C/Population, D/Population, R/Population are per 10,000 people", sep = " "),
   format="latex", booktabs=TRUE) %>%
   kable_styling(latex_options="scale_down")
@@ -251,6 +266,73 @@ Deaths/Confirmed rate (D/C %).
 5. There can be other factors that contribute to D/C % by Density. If a country has more people older than a certain age, it will be more affected since covid-19 has much worse impact on older people. Italy is a great exmaple. Better medical facilities will have positive effect on this. 
 
 
+```{r}
+all <- all %>% 
+  mutate(Country.Region = as.factor(Country.Region)) %>% 
+  slice(1:select_top)
+
+p_confirmed <- all %>% 
+  mutate(Country.Region = reorder(Country.Region, Confirmed, FUN = mean)) %>% 
+  ggplot(aes(Country.Region, Confirmed)) + 
+  geom_bar(stat = "identity", color = "black") +
+  labs(title = "Total Confirmed", 
+       y = "Confirmed",
+       x = "Country") +
+  coord_flip()
+
+p_deaths <- all %>% 
+  mutate(Country.Region = reorder(Country.Region, Deaths, FUN = mean)) %>% 
+  ggplot(aes(Country.Region, Deaths)) + 
+  geom_bar(stat = "identity", color = "black") +
+  labs(y = "Deaths",
+       x = "Country") +
+  coord_flip()
+
+grid.arrange(p_confirmed, p_deaths, ncol = 2)
+
+
+p_c_population <- all %>% 
+  mutate(Country.Region = reorder(Country.Region, `C/Population`, FUN = mean)) %>% 
+  ggplot(aes(Country.Region, `C/Population`)) + 
+  geom_bar(stat = "identity", color = "black") +
+  labs(y = "Confirmed per 10,000 people",
+       x = "Country") +
+  coord_flip()
+
+p_d_population <- all %>% 
+  mutate(Country.Region = reorder(Country.Region, `D/Population`, FUN = mean)) %>% 
+  ggplot(aes(Country.Region, `D/Population`)) + 
+  geom_bar(stat = "identity", color = "black") +
+  labs(y = "Deaths per 10,000 people",
+       x = "Country") +
+  coord_flip()
+
+grid.arrange(p_c_population, p_d_population, ncol = 2)
+
+
+p_deaths_confirmed <- all %>% 
+  mutate(Country.Region = reorder(Country.Region, `D/C %`, FUN = mean)) %>% 
+  ggplot(aes(Country.Region, `D/C %`)) + 
+  geom_bar(stat = "identity", color = "black") +
+  labs(y = "Death/Confirmed percentage",
+       x = "Country") +
+  coord_flip()
+
+p_deaths_confirmed_by_density <- all %>% 
+  mutate(Country.Region = reorder(Country.Region, `D/C % by Density`, FUN = mean)) %>% 
+  ggplot(aes(Country.Region, `D/C % by Density`)) + 
+  geom_bar(stat = "identity", color = "black") +
+  labs(y = "Death/Confirmed % by Density",
+       x = "Country") +
+  coord_flip()
+
+grid.arrange(p_deaths_confirmed, p_deaths_confirmed_by_density, ncol = 2)
+
+grid.arrange(p_confirmed, p_deaths, p_deaths_confirmed, 
+             p_c_population, p_d_population, p_deaths_confirmed_by_density, 
+             ncol = 3, nrow = 2)
+
+```
 
 
 
