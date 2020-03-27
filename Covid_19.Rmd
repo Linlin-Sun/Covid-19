@@ -12,21 +12,23 @@ output:
 The 2019-2020 Covid-19 outbreak is an ongoing global outbreak of Covid-19 disease 2019 that has been declared a Public Health Emergency of International Concern. It is caused by the SARS-CoV-2 Covid-19, first identified in Wuhan, Hubei, China. Over 100 countries and territories have been affected at the beginning of March 2020 with major outbreaks in central China, South Korea, Italy, Iran, France, and Germany. 
 
 # Background of the author
-As a newbie in the data science world, I would like to use the Covid-19 data to practice my data wrangling skills. 
-As a Chinese-American, I have spent more than half of my life here in US than in China. I have paid attention to the news in China while Wuhan and other places in China were experiencing the covid-19 spreading. Now, I am experiencing covid-19 spread in US. Beside trying my best to do the social distancing, I would like to make my small portion of contribution to the covid-19 analysis. 
+As a newbie in the data science world, I would like to keep up with how covid-19 is spreading everyday. 
 
 I am hoping we will get through this soon and wish the best for everyone!
 
-## Data files
+# Data files
 
 I have been referring to [Johns Hopkins CSSE Covid-19](
 https://gisanddata.maps.arcgis.com/apps/opsdashboard/index.html#/bda7594740fd40299423467b48e9ecf)
 
-https://gisanddata.maps.arcgis.com/apps/opsdashboard/index.html#/bda7594740fd40299423467b48e9ecf 
-for affected cases. From their website, they provided a [github link](https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data/csse_covid_19_time_series) containing the data they are using to populate the website. 
+https://gisanddata.maps.arcgis.com/apps/opsdashboard/index.html#/bda7594740fd40299423467b48e9ecf for current cases around the world. 
+
+Here is the link to get the data.  [github link](https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data/csse_covid_19_time_series) 
 
 I got the world population information from [https://www.worldometers.info/world-population/population-by-country/](
 https://www.worldometers.info/world-population/population-by-country/)
+
+# Exploratory Data Analysis
 
 Including the library. 
 
@@ -65,13 +67,18 @@ d_ts_col_count <- length(colnames(d_ts))
 Set some constant variables.
 
 ```{r}
+# This decide how many countries will be displayed. 
+# For the plot, the default colors do not all work well. I handpicked 15 colors 
+# which I think works better. 
+# If you want to run this using more than 15 countries, the code will go back to 
+# using the default coloring by R. 
 select_top <- 15
 
-day0_count <- 100
+day1_count <- 100
 
-colors <- c("aquamarine2", "brown", "blue", "orange", "chartreuse", 
-            "darkgoldenrod1", "cyan", "darkgreen", "yellow", "darkseagreen",
-            "grey39", "deepskyblue4", "darkorchid", "pink2", "red1")
+manual_colors <- c("aquamarine2", "brown", "blue", "orange", "chartreuse", 
+            "darkgoldenrod1", "cyan", "darkgreen", "grey39", "darkseagreen",
+            "yellow", "deepskyblue4", "darkorchid", "pink2", "red1")
 
 ```
 
@@ -95,9 +102,9 @@ deaths <- d_ts %>% select(-Province.State, -Lat, -Long) %>%
     mutate(Date_temp = str_replace(Date_temp, "X", "")) %>%
     mutate(Date = as.POSIXct(strptime(Date_temp, "%m.%d.%y")))
 
-confirmed_deaths <- cbind(confirmed[, c(1, 4)], confirmed[, 3], deaths[3])
+all <- cbind(confirmed[, c(1, 4)], confirmed[, 3], deaths[3])
 
-str(confirmed_deaths)
+str(all)
 
 today <- max(confirmed$Date)
 
@@ -115,12 +122,11 @@ top_confirmed_countries <- confirmed %>% filter(Date == today) %>%
 
 # confirmed %>% filter(Country.Region == "United Kingdom")
 
-confirmed %>% filter(Country.Region %in% top_confirmed_countries) %>% 
+p_c <- confirmed %>% filter(Country.Region %in% top_confirmed_countries) %>% 
     ggplot(aes(Date, Confirmed, color = Country.Region)) +
     geom_line() +
     theme(plot.title = element_text(hjust = 0.5),
           plot.subtitle = element_text(hjust = 0.5)) +
-    scale_color_manual(values = colors) +
     labs(title = paste("Timeline for Covid-19 Confirmed Cases as of", today, sep = " "),
          subtitle = paste("Showing countries with top", select_top, 
                           "most confirmed cases in the world", sep = " "), 
@@ -128,67 +134,37 @@ confirmed %>% filter(Country.Region %in% top_confirmed_countries) %>%
          y = "Confirmed case count",
          caption = "datasource: https://github.com/CSSEGISandData/COVID-19",
          color = "Country")
+if (select_top <= length(manual_colors)) {
+  p_c <- p_c + scale_color_manual(values = manual_colors)
+}
+
+p_c
+
 ```
 
-The above plot show show the covid-19 progressed in the past few months for each country displayed. 
-I am going to find out the day that the country has around 100 confirmed cases, then plot each country at the same starting point. 
-This way, it is easier to do visual comparison among the countries. 
+The above plot shows how the covid-19 confirmed case changed in the past few months for each country displayed. 
+
 
 ```{r}
-
-# day0 plot
-
-
-confirmed_day0 <- confirmed %>% filter(Confirmed >= day0_count) %>% group_by(Country.Region) %>% 
-    arrange(Confirmed) %>% mutate(Day = row_number() - 1) %>% ungroup()
-
-x_lim_max <- confirmed_day0 %>% filter(Country.Region %in% top_confirmed_countries) %>% 
-  filter(Country.Region != top_confirmed_countries[1]) %>% 
-  arrange(desc(Day)) %>% 
-  select(Day) %>% 
-  summarize(max_day = max(Day)) %>% 
-  pull(max_day)
-
-  
-p_day0_base <- confirmed_day0 %>% filter(Country.Region %in% top_confirmed_countries) %>%
-    ggplot(aes(Day, Confirmed, color = Country.Region)) +
+p_d <- deaths %>% filter(Country.Region %in% top_confirmed_countries) %>% 
+    ggplot(aes(Date, Deaths, color = Country.Region)) +
     geom_line() +
     theme(plot.title = element_text(hjust = 0.5),
           plot.subtitle = element_text(hjust = 0.5)) +
-    scale_x_continuous(breaks = seq(0, x_lim_max, 5), lim = c(0, x_lim_max)) +
-    scale_color_manual(values = colors)
-p_day0 <- p_day0_base +
-      labs(title = paste("Timeline for Covid-19 Confirmed Cases as of", today, sep = " "),
-           subtitle = paste("Showing countries with top", select_top, 
-    "most confirmed cases in the world\nDay 0 starts with around 100 case count for each country", 
-                    sep = " "), 
-           x = "Day", 
-           y = "Confirmed case count",
-           caption = "datasource: https://github.com/CSSEGISandData/COVID-19",
-           color = "Country")
-p_day0
+    labs(title = paste("Timeline for Covid-19 Deaths Cases as of", today, sep = " "),
+         subtitle = paste("Showing countries with top", select_top, 
+                          "most confirmed cases in the world", sep = " "), 
+         x = "Date", 
+         y = "Deaths case count",
+         caption = "datasource: https://github.com/CSSEGISandData/COVID-19",
+         color = "Country")
+if (select_top <= length(manual_colors)) {
+  p_d <- p_d + scale_color_manual(values = manual_colors)
+}
+
+p_d
 ```
-
-Show the same plot side by side with the confirmed case being transformed on log2 scale
-
-
-```{r}
-p_day0_log2 <- p_day0_base + 
-  scale_y_continuous(trans = "log2") + 
-  theme(legend.position = "none") +
-  labs(y = "Confirmed (scale log2)")
-grid.arrange(p_day0_base + theme(legend.position = "none"), p_day0_log2, ncol = 2)
-
-```
-Below is what I see from the above plots. 
-1. China had the fastest growth at the beginning, most likely due to the dense population and no prepareness being the first being hit. 
-
-2. European countries were the next that got most impacted. The countries are Spain, Germany and Italy. 
-
-3. US started after European countries got impacted. The confirmed case growth rate of US exceed the other three European countries. 
-
-4. From the log2 scaled plot, all countries confirmed growth rate seems to be similar until the situation got controlled. 
-
+The above plot shows how the covid-19 deaths case changed in the past few months for each country displayed. 
 
 I would like to combine country information such as population, density and median_age into my analysis. 
 
@@ -209,24 +185,24 @@ wppd <- wp %>%
     mutate(Population = as.numeric(Population)) %>% 
     select(Country.Region, Density, Population, Median_Age)
 
-confirmed_deaths <- confirmed_deaths %>% mutate(Country.Region = as.character(Country.Region))
+all <- all %>% mutate(Country.Region = as.character(Country.Region))
 
-all <- left_join(confirmed_deaths %>% filter(Date == today), wppd, by = "Country.Region")
+ALL <- left_join(all, wppd, by = "Country.Region")
 
-# sapply(all, function(col) {sum(is.na(col))})
-unique(all[is.na(all$Density),]$Country.Region)
+# sapply(ALL, function(col) {sum(is.na(col))})
+unique(ALL[is.na(ALL$Density),]$Country.Region)
 # Three countries do not get a matching density
 
 # There are two Congo entries in covid-19 data, one congo entry from the world population data
-all$Density[str_detect(all$Country.Region, "Congo")] <- 
+ALL$Density[str_detect(ALL$Country.Region, "Congo")] <- 
     wppd$Density[wppd$Country.Region == "Congo"]
 
-all$Population[str_detect(all$Country.Region, "Congo")] <-
+ALL$Population[str_detect(ALL$Country.Region, "Congo")] <-
     wppd$Population[wppd$Country.Region == "Congo"]/2
 
 # Cruise ship is not a real country. 
-all$Density[str_detect(all$Country.Region, "Cruise Ship")] <- 10
-all$Population[str_detect(all$Country.Region, "Cruise Ship")] <-2000
+ALL$Density[str_detect(ALL$Country.Region, "Diamond Princess")] <- 10
+ALL$Population[str_detect(ALL$Country.Region, "Diamond Princess")] <-2000
 ```
 
 I am calculating below columns. 
@@ -237,14 +213,14 @@ C/Population and D/Population shows number of cases per 10,000 people.
 
 
 ```{r}
-all <- all %>% 
+today_ALL <- ALL %>% filter(Date == today) %>% 
     mutate("D/C %" = (Deaths/Confirmed)*100) %>% 
     mutate("C/Population" = (Confirmed/Population)*10000, 
            "D/Population" = (Deaths/Population)*10000) %>%
     mutate("D/C % by Density" = `D/C %`/Density) %>% 
     arrange(desc(Confirmed))
 
-knitr::kable(slice(all, 1:select_top),
+knitr::kable(slice(today_ALL, 1:select_top),
   caption = paste("World Covid-19 Summary", today, "C/Population, D/Population, R/Population are per 10,000 people", sep = " "),
   format="latex", booktabs=TRUE) %>%
   kable_styling(latex_options="scale_down")
@@ -252,7 +228,7 @@ knitr::kable(slice(all, 1:select_top),
 ```
 
 
-Below are my personal opinion from this table. I could be wrong. Please let me know what you think. I will really appreciate it. 
+Below are my personal opinion from table 1. I could be wrong. Please let me know what you think. I will really appreciate it. 
 
 1. If not considering the population and density factors, China has the highest confirmed case. Italy has the highest 
 Deaths/Confirmed rate (D/C %). 
@@ -261,26 +237,25 @@ Deaths/Confirmed rate (D/C %).
 
 3. Adding the consideration of population density, Iran has relative high Deaths/Confirmed by density. Italy is not on the top of this list.
 
-4. For most of the countries which have higher confirmed cases, most of them have D/C % by Density within 0.05. This means to me that the virus transmission seems to be similar across all countries. 
+4. For most of the countries which have higher confirmed cases, most of them have D/C % by Density within 0.05. This means to me that the virus transmission seems to be similar across ALL countries. 
 
 5. There can be other factors that contribute to D/C % by Density. If a country has more people older than a certain age, it will be more affected since covid-19 has much worse impact on older people. Italy is a great exmaple. Better medical facilities will have positive effect on this. 
 
 
 ```{r}
-all <- all %>% 
+today_ALL <- today_ALL %>% 
   mutate(Country.Region = as.factor(Country.Region)) %>% 
   slice(1:select_top)
 
-p_confirmed <- all %>% 
+p_confirmed <- today_ALL %>% 
   mutate(Country.Region = reorder(Country.Region, Confirmed, FUN = mean)) %>% 
   ggplot(aes(Country.Region, Confirmed)) + 
   geom_bar(stat = "identity", color = "black") +
-  labs(title = "Total Confirmed", 
-       y = "Confirmed",
+  labs(y = "Confirmed",
        x = "Country") +
   coord_flip()
 
-p_deaths <- all %>% 
+p_deaths <- today_ALL %>% 
   mutate(Country.Region = reorder(Country.Region, Deaths, FUN = mean)) %>% 
   ggplot(aes(Country.Region, Deaths)) + 
   geom_bar(stat = "identity", color = "black") +
@@ -291,7 +266,7 @@ p_deaths <- all %>%
 grid.arrange(p_confirmed, p_deaths, ncol = 2)
 
 
-p_c_population <- all %>% 
+p_c_population <- today_ALL %>% 
   mutate(Country.Region = reorder(Country.Region, `C/Population`, FUN = mean)) %>% 
   ggplot(aes(Country.Region, `C/Population`)) + 
   geom_bar(stat = "identity", color = "black") +
@@ -299,7 +274,7 @@ p_c_population <- all %>%
        x = "Country") +
   coord_flip()
 
-p_d_population <- all %>% 
+p_d_population <- today_ALL %>% 
   mutate(Country.Region = reorder(Country.Region, `D/Population`, FUN = mean)) %>% 
   ggplot(aes(Country.Region, `D/Population`)) + 
   geom_bar(stat = "identity", color = "black") +
@@ -310,15 +285,15 @@ p_d_population <- all %>%
 grid.arrange(p_c_population, p_d_population, ncol = 2)
 
 
-p_deaths_confirmed <- all %>% 
+p_deaths_confirmed <- today_ALL %>% 
   mutate(Country.Region = reorder(Country.Region, `D/C %`, FUN = mean)) %>% 
   ggplot(aes(Country.Region, `D/C %`)) + 
   geom_bar(stat = "identity", color = "black") +
-  labs(y = "Death/Confirmed percentage",
+  labs(y = "Death/Confirmed %",
        x = "Country") +
   coord_flip()
 
-p_deaths_confirmed_by_density <- all %>% 
+p_deaths_confirmed_by_density <- today_ALL %>% 
   mutate(Country.Region = reorder(Country.Region, `D/C % by Density`, FUN = mean)) %>% 
   ggplot(aes(Country.Region, `D/C % by Density`)) + 
   geom_bar(stat = "identity", color = "black") +
@@ -335,4 +310,107 @@ grid.arrange(p_confirmed, p_deaths, p_deaths_confirmed,
 ```
 
 
+I am going to find out the day that the country has around 100 confirmed cases, then plot each country at the same starting point. 
+This way, it is easier to do visual comparison among the countries. 
+
+
+```{r}
+ALL_day1 <- ALL %>% filter(Confirmed >= day1_count) %>% group_by(Country.Region) %>% 
+    arrange(Confirmed) %>% mutate(Day = row_number()) %>% ungroup()
+
+x_lim_max <- ALL_day1 %>% filter(Country.Region %in% top_confirmed_countries) %>% 
+  filter(Country.Region != "China") %>% 
+  arrange(desc(Day)) %>% 
+  select(Day) %>% 
+  summarize(max_day = max(Day)) %>% 
+  pull(max_day)
+
+  
+p_day1_base <- ALL_day1 %>% filter(Country.Region %in% top_confirmed_countries) %>%
+    ggplot(aes(Day, Confirmed, color = Country.Region)) +
+    geom_line() +
+    theme(plot.title = element_text(hjust = 0.5),
+          plot.subtitle = element_text(hjust = 0.5)) +
+    scale_x_continuous(breaks = seq(1, x_lim_max, 5), lim = c(1, x_lim_max))
+
+if(select_top <= length(manual_colors)) {
+  p_day1_base <- p_day1_base + scale_color_manual(values = manual_colors)
+}
+
+p_day1 <- p_day1_base +
+      labs(title = paste("Timeline for Covid-19 Confirmed Cases as of", today, sep = " "),
+           subtitle = paste("Showing countries with top", select_top, 
+    "most confirmed cases in the world\nDay 1 starts with around 100 case count for each country", 
+                    sep = " "), 
+           x = "Day", 
+           y = "Confirmed case count",
+           caption = "datasource: https://github.com/CSSEGISandData/COVID-19",
+           color = "Country")
+p_day1
+```
+
+
+Show the same plot side by side with the confirmed case being transformed on log2 scale
+
+
+```{r}
+p_day1_log2 <- p_day1_base + 
+  scale_y_continuous(trans = "log2") + 
+  theme(legend.position = "none") +
+  labs(y = "Confirmed (scale log2)")
+grid.arrange(p_day1_base + theme(legend.position = "none"), p_day1_log2, ncol = 2)
+
+```
+Below is what I see from the above plots. 
+
+1. China had the fastest growth at the beginning, most likely due to the dense population and no prepareness being the first being hit. 
+
+2. European countries were the next that got most impacted. The countries are Spain, Germany and Italy. 
+
+3. US started after European countries got impacted. The confirmed case growth rate of US exceed the other three European countries. 
+
+4. From the log2 scaled plot, all countries confirmed growth rate seems to be similar until the situation got controlled. 
+
+# Modeling and prediction for US data
+```{r}
+str(ALL_day1)
+US_all_day1 <- ALL_day1 %>% filter(Country.Region == "US")
+
+US_all_day1
+
+#
+us_fit_1 <- US_all_day1 %>% lm(Confirmed ~ Day, data = .)
+summary(us_fit_1)
+
+
+us_fit_2 <- US_all_day1 %>% mutate(Day2 = Day^2) %>% lm(Confirmed ~ Day + Day2, data = .)
+summary(us_fit_2)
+
+tail(US_all_day1, 6)
+
+
+test_Day <- seq(1:100)
+test_Day2 <- test_Day^2
+test_data_2 <- data.frame(Day = test_Day, Day2 = test_Day2)
+y_hat_2_20200327 <- predict(us_fit_2, newdata = test_data_2)
+y_hat_2_20200327
+
+us_fit_3 <- US_all_day1 %>% mutate(Day2 = Day^2, Day3 = Day^3) %>% lm(Confirmed ~ Day + Day2 + Day3, data = .)
+summary(us_fit_3)
+
+test_Day3 <- test_Day^3
+test_data_3 <- data.frame(Day = test_Day, Day2 = test_Day2, Day3 = test_Day3)
+y_hat_3_20200327 <- predict(us_fit_3, newdata = test_data_3)
+y_hat_3_20200327
+
+us_fit_4 <- US_all_day1 %>% mutate(Day2 = Day^2, Day3 = Day^3, Day4 = Day^4) %>% lm(Confirmed ~ Day + Day2 + Day3 + Day4, data = .)
+summary(us_fit_4)
+
+test_Day4 <- test_Day^4
+test_data_4 <- data.frame(Day = test_Day, Day2 = test_Day2, Day3 = test_Day3, Day4 = test_Day4)
+y_hat_4_20200327 <- predict(us_fit_4, newdata = test_data_4)
+y_hat_4_20200327[1:26]
+US_all_day1$Confirmed[1:24]
+
+```
 
