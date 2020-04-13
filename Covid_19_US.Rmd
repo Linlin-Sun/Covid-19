@@ -41,6 +41,8 @@ library(kableExtra)
 library(leaflet)
 library(mapview)
 library(sf)
+library(maps)
+library(viridis)
 options(digits=2)
 ```
 
@@ -68,23 +70,6 @@ d_US_ts_col_count <- length(colnames(d_US_ts))
 
 ```
 
-Set some constant variables.
-
-```{r}
-# This decide how many countries will be displayed. 
-# For the plot, the default colors do not all work well. I handpicked 15 colors 
-# which I think works better. 
-# If you want to run this using more than 15 countries, the code will go back to 
-# using the default coloring by R. 
-select_top <- 15
-
-day1_count <- 100
-
-manual_colors <- c("aquamarine2", "brown", "blue", "orange", "chartreuse", 
-            "darkgoldenrod1", "cyan", "darkgreen", "grey39", "darkseagreen",
-            "yellow", "deepskyblue4", "darkorchid", "pink2", "red1")
-
-```
 
 First, I get the confirmed and deaths data ready and combine them. 
 
@@ -109,29 +94,21 @@ all_US <- cbind(c_US, Deaths = d_US$value)
 today <- max(all_US$Date)
 ```
 
-```{r}
+```{r, message = FALSE}
 today_map <- c_US %>% 
     filter(Date == today)
-
-unique(today_map$Province_State)
 
 US_exclude <- c("American Samoa", "Guam", "Northern Mariana Islands", "Puerto Rico", "Virgin Islands", "Alaska", "Hawaii", "Diamond Princess", "Grand Princess")
 today_map_continous <- today_map %>% filter(!Province_State %in% US_exclude) %>% 
     filter(Long_ != 0 & Lat != 0) %>% 
     filter(Confirmed != 0)
 
-
-str(today_map_continous)
-
 ```
 
 # Interactive bubble map with mapview. 
 
-```{r}
-
-
+```{r, message = FALSE}
 today_map_sf <- st_as_sf(today_map_continous, coords = c("Long_", "Lat"), crs = 4326)
-str(today_map_sf)
 
 cex <- sqrt(today_map_sf$Confirmed)/10
 confirmed <- mapview(today_map_sf, grid = FALSE, cex = cex, alpha = 0.3)
@@ -143,14 +120,13 @@ mapshot(confirmed, url = "US_Confirmed_bubble_mapview.html")
 
 # static bubble map with ggplot2. 
 
-```{r}
+```{r, message = FALSE}
 
 # https://www.r-graph-gallery.com/330-bubble-map-with-ggplot2.html
 
 # get the US map from world
-library(maps)
-library(viridis)
-help(package = "maps")
+
+# help(package = "maps")
 
 US_map <- map_data("state")
 
@@ -166,14 +142,14 @@ p
 
 # Interactive bubble map with plotly
 
-```{r}
+```{r, message = FALSE}
 library(plotly)
 library(htmlwidgets)
 
 today_map_continous_ordered <- today_map_continous %>% 
   arrange(Confirmed) %>% 
   mutate(Combined_Key = factor(Combined_Key, unique(Combined_Key))) %>% 
-  mutate(mytext = paste("City, State, Country: ", Combined_Key, "\n", "Confirmed cases: ", Confirmed, sep = ""))
+  mutate(mytext = paste("City,State,Country: ", Combined_Key, "\n", "Confirmed cases: ", Confirmed, sep = ""))
 
 p2 <- today_map_continous_ordered %>% 
   ggplot() +
@@ -186,6 +162,33 @@ p2 <- today_map_continous_ordered %>%
 p2 <- ggplotly(p2, tooltip = "text")
 p2
 saveWidget(p2, file = paste0(getwd(), "/US_Confirmed_Bubble_plotly.html"))
+
+```
+
+
+
+
+
+# Static choropleth with tmap
+
+```{r, message = FALSE}
+library(tigris)
+library(tmap)
+us_geo <- tigris::states(class = "sf")
+# plot(st_geometry(us_geo))
+
+today_c_by_state <- today_map %>% group_by(Province_State) %>% 
+  summarize(Confirmed = sum(Confirmed)) %>% 
+  ungroup()
+
+combined <- inner_join(us_geo, today_c_by_state, by = c("NAME" = "Province_State"))
+# qtm(combined, fill = "Confirmed")
+
+combined_continuous <- combined %>% filter(REGION != 9) %>% 
+  filter(!STUSPS %in% c("AK", "HI"))
+
+tm_shape(combined_continuous, projection = 5070) +
+  tm_polygons(col = "Confirmed", style = "log10")
 
 ```
 
