@@ -38,16 +38,19 @@ library(gridExtra)
 library(lubridate)
 library(matrixStats)
 library(kableExtra)
+library(leaflet)
+library(mapview)
+library(sf)
 options(digits=2)
 ```
 
 Loading the data. 
 
 ```{r, message = FALSE, results = 'hide', echo = FALSE}
-# c_ts <- read.csv("../input/covid19/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Confirmed.csv", header = TRUE)
-# c_ts_col_count <- length(colnames(c_ts))
-# d_ts <- read.csv("../input/covid19/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Deaths.csv", header = TRUE)
-# d_ts_col_count <- length(colnames(d_ts))
+# c_g_ts <- read.csv("../input/covid19/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Confirmed.csv", header = TRUE)
+# c_g_ts_col_count <- length(colnames(c_g_ts))
+# d_g_ts <- read.csv("../input/covid19/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Deaths.csv", header = TRUE)
+# d_g_ts_col_count <- length(colnames(d_g_ts))
 # r_ts <- read.csv("../input/covid19/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Recovered.csv", header = TRUE)
 # r_ts_col_count <- length(colnames(r_ts))
 
@@ -55,13 +58,14 @@ Loading the data.
 
 ```{r, message = FALSE, results = 'hide'}
 path <- getwd()
-covid_Confirmed_ts <- "data/time_series_covid_19_confirmed_global.csv"
-covid_Deaths_ts <- "data/time_series_covid_19_deaths_global.csv"
+covid_c_g_ts <- "data/time_series_covid_19_confirmed_global.csv"
+covid_d_g_ts <- "data/time_series_covid_19_deaths_global.csv"
 
-c_ts <- read.csv(paste(path, covid_Confirmed_ts, sep = "/"), header = TRUE)
-c_ts_col_count <- length(colnames(c_ts))
-d_ts <- read.csv(paste(path, covid_Deaths_ts, sep = "/"), header = TRUE)
-d_ts_col_count <- length(colnames(d_ts))
+c_g_ts <- read.csv(paste(path, covid_c_g_ts, sep = "/"), header = TRUE)
+c_g_ts_col_count <- length(colnames(c_g_ts))
+d_g_ts <- read.csv(paste(path, covid_d_g_ts, sep = "/"), header = TRUE)
+d_g_ts_col_count <- length(colnames(d_g_ts))
+
 ```
 
 Set some constant variables.
@@ -86,43 +90,42 @@ First, I get the confirmed and deaths data ready and combine them.
 
 
 ```{r, message = FALSE}
-confirmed <- c_ts %>% select(-Province.State, -Lat, -Long) %>%
-    gather(Date_temp, value, -Country.Region) %>%
+c_g <- c_g_ts %>% 
+    gather(Date_temp, value, starts_with("X")) %>%
     group_by(Country.Region, Date_temp) %>%
     summarize(Confirmed = sum(value)) %>%
     ungroup() %>%
     mutate(Date_temp = str_replace(Date_temp, "X", "")) %>%
     mutate(Date = as.POSIXct(strptime(Date_temp, "%m.%d.%y")))
 
-deaths <- d_ts %>% select(-Province.State, -Lat, -Long) %>%
-    gather(Date_temp, value, -Country.Region) %>%
+d_g <- d_g_ts %>% 
+    gather(Date_temp, value, starts_with("X")) %>%
     group_by(Country.Region, Date_temp) %>%
     summarize(Deaths = sum(value)) %>%
     ungroup() %>%
     mutate(Date_temp = str_replace(Date_temp, "X", "")) %>%
     mutate(Date = as.POSIXct(strptime(Date_temp, "%m.%d.%y")))
 
-all <- cbind(confirmed[, c(1, 4)], confirmed[, 3], deaths[3])
+all <- cbind(c_g[, c(1, 4)], c_g[, 3], d_g[3])
 
 str(all)
 
-today <- max(confirmed$Date)
-
+today <- max(all$Date)
 ```
 
 I would like to plot the time series data for a few countries with the most confirmed cases. 
 
 ```{r, , message = FALSE}
 
-top_confirmed_countries <- confirmed %>% filter(Date == today) %>% 
+top_confirmed_countries <- c_g %>% filter(Date == today) %>% 
     arrange(desc(Confirmed)) %>% 
     top_n(select_top, Confirmed) %>% 
     mutate(Country.Region = as.character(Country.Region)) %>% 
     .$Country.Region
 
-# confirmed %>% filter(Country.Region == "United Kingdom")
+# c_g %>% filter(Country.Region == "United Kingdom")
 
-p_c <- confirmed %>% filter(Country.Region %in% top_confirmed_countries) %>% 
+p_c <- c_g %>% filter(Country.Region %in% top_confirmed_countries) %>% 
     ggplot(aes(Date, Confirmed, color = Country.Region)) +
     geom_line() +
     theme(plot.title = element_text(hjust = 0.5),
@@ -142,11 +145,11 @@ p_c
 
 ```
 
-The above plot shows how the covid-19 confirmed case changed in the past few months for each country displayed. 
+The above plot shows how the covid-19 confirmed case changed for each country displayed. 
 
 
 ```{r}
-p_d <- deaths %>% filter(Country.Region %in% top_confirmed_countries) %>% 
+p_d <- d_g %>% filter(Country.Region %in% top_confirmed_countries) %>% 
     ggplot(aes(Date, Deaths, color = Country.Region)) +
     geom_line() +
     theme(plot.title = element_text(hjust = 0.5),
@@ -164,7 +167,7 @@ if (select_top <= length(manual_colors)) {
 
 p_d
 ```
-The above plot shows how the covid-19 deaths case changed in the past few months for each country displayed. 
+The above plot shows how the covid-19 deaths case changed for each country displayed. 
 
 I would like to combine country information such as population, density and median_age into my analysis. 
 
@@ -409,8 +412,100 @@ summary(us_fit_4)
 test_Day4 <- test_Day^4
 test_data_4 <- data.frame(Day = test_Day, Day2 = test_Day2, Day3 = test_Day3, Day4 = test_Day4)
 y_hat_4_20200327 <- predict(us_fit_4, newdata = test_data_4)
-y_hat_4_20200327[1:26]
+y_hat_4_20200327[1:40]
 US_all_day1$Confirmed[1:24]
+
+```
+
+
+
+```{r}
+confirmed_map <- c_g_ts %>% 
+    gather(Date_temp, value, -Country.Region, -Province.State, -Lat, -Long) %>%
+    mutate(Date_temp = str_replace(Date_temp, "X", "")) %>%
+    mutate(Date = as.POSIXct(strptime(Date_temp, "%m.%d.%y")))
+
+deaths_map <- d_g_ts %>% 
+    gather(Date_temp, value, -Country.Region, -Province.State, -Lat, -Long) %>%
+    mutate(Date_temp = str_replace(Date_temp, "X", "")) %>%
+    mutate(Date = as.POSIXct(strptime(Date_temp, "%m.%d.%y")))
+
+```
+
+
+
+```{r}
+download.file("http://thematicmapping.org/downloads/TM_WORLD_BORDERS_SIMPL-0.3.zip", destfile = "data/world_shape_simple_file.zip")
+# system("unzip data/world_shape_simple_file.zip")
+
+library(rgdal)
+my_spdf <- readOGR( 
+  dsn = paste0(getwd(),"/data/world_shape_simple_file"), 
+  layer = "TM_WORLD_BORDERS_SIMPL-0.3",
+  verbose = FALSE
+)
+```
+
+```{r}
+plot(my_spdf)
+plot(my_spdf, col = "#f2f2f2", bg = "skyblue", lwd = 0.25, border = 0)
+```
+
+```{r}
+library(tmap)
+library(sf)
+class(my_spdf)
+world_sf <- st_as_sf(my_spdf)
+class(world_sf)
+# str(world_sf)
+# world_sf$NAME
+
+# st_is_valid(world_sf)
+# world_sf <- world_sf[st_is_valid(world_sf), ]
+
+tm_shape(world_sf) + tm_borders()
+
+```
+
+```{r}
+today_map <- confirmed_map %>% filter(Date == today)
+
+today_map_sf <- st_as_sf(today_map, coords = c("Long", "Lat"), crs = 4326)
+str(today_map_sf)
+```
+
+
+```{r}
+
+
+# Interactive bubble map with mapview
+cex <- sqrt(today_map_sf$value)/10
+mapview(today_map_sf, grid = FALSE, cex = cex)
+
+mapview(today_map_sf, grid = FALSE)
+
+```
+
+
+```{r}
+# Using ggplot2. NOT WORKING YET.
+library(viridis)
+today_map_sf %>% ggplot(aes(fill = value, color = value)) + 
+  geom_sf() +
+  # coord_sf(crs = 4326, datum = NA) +
+  scale_fill_viridis() +
+  scale_color_viridis()
+
+```
+
+
+```{r}
+## With leaflet
+library(leaflet)
+m <- leaflet() %>% addTiles()
+m
+
+
 
 ```
 

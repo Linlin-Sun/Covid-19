@@ -1,0 +1,191 @@
+---
+title: "2019 - 2020 Covid-19 outbreak"
+author: "Linlin Sun"
+date: "3/10/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+# Background
+
+The 2019-2020 Covid-19 outbreak is an ongoing global outbreak of Covid-19 disease 2019 that has been declared a Public Health Emergency of International Concern. It is caused by the SARS-CoV-2 Covid-19, first identified in Wuhan, Hubei, China. Over 100 countries and territories have been affected at the beginning of March 2020 with major outbreaks in central China, South Korea, Italy, Iran, France, and Germany. 
+
+# Background of the author
+As a newbie in the data science world, I would like to keep up with how covid-19 is spreading everyday. 
+
+I am hoping we will get through this soon and wish the best for everyone!
+
+# Data files
+
+I have been referring to [Johns Hopkins CSSE Covid-19](
+https://gisanddata.maps.arcgis.com/apps/opsdashboard/index.html#/bda7594740fd40299423467b48e9ecf)
+
+https://gisanddata.maps.arcgis.com/apps/opsdashboard/index.html#/bda7594740fd40299423467b48e9ecf for current cases around the world. 
+
+Here is the link to get the data.  [github link](https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data/csse_covid_19_time_series) 
+
+I got the world population information from [https://www.worldometers.info/world-population/population-by-country/](
+https://www.worldometers.info/world-population/population-by-country/)
+
+# Exploratory Data Analysis
+
+Including the library. 
+
+```{r, message = FALSE, results = 'hide'}
+library(tidyverse)
+library(gridExtra)
+library(lubridate)
+library(matrixStats)
+library(kableExtra)
+library(leaflet)
+library(mapview)
+library(sf)
+options(digits=2)
+```
+
+Loading the data. 
+
+```{r, message = FALSE, results = 'hide', echo = FALSE}
+# c_g_ts <- read.csv("../input/covid19/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Confirmed.csv", header = TRUE)
+# c_g_ts_col_count <- length(colnames(c_g_ts))
+# d_g_ts <- read.csv("../input/covid19/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Deaths.csv", header = TRUE)
+# d_g_ts_col_count <- length(colnames(d_g_ts))
+# r_ts <- read.csv("../input/covid19/csse_covid_19_data/csse_covid_19_time_series/time_series_19-covid-Recovered.csv", header = TRUE)
+# r_ts_col_count <- length(colnames(r_ts))
+
+```
+
+```{r, message = FALSE, results = 'hide'}
+path <- getwd()
+covid_c_US_ts <- "data/time_series_covid_19_confirmed_US.csv"
+covid_d_US_ts <- "data/time_series_covid_19_deaths_US.csv"
+
+c_US_ts <- read.csv(paste(path, covid_c_US_ts, sep = "/"), header = TRUE)
+c_US_ts_col_count <- length(colnames(c_US_ts))
+d_US_ts <- read.csv(paste(path, covid_d_US_ts, sep = "/"), header = TRUE)
+d_US_ts_col_count <- length(colnames(d_US_ts))
+
+```
+
+Set some constant variables.
+
+```{r}
+# This decide how many countries will be displayed. 
+# For the plot, the default colors do not all work well. I handpicked 15 colors 
+# which I think works better. 
+# If you want to run this using more than 15 countries, the code will go back to 
+# using the default coloring by R. 
+select_top <- 15
+
+day1_count <- 100
+
+manual_colors <- c("aquamarine2", "brown", "blue", "orange", "chartreuse", 
+            "darkgoldenrod1", "cyan", "darkgreen", "grey39", "darkseagreen",
+            "yellow", "deepskyblue4", "darkorchid", "pink2", "red1")
+
+```
+
+First, I get the confirmed and deaths data ready and combine them. 
+
+
+```{r, message = FALSE}
+c_US <- c_US_ts %>% 
+    gather(Date_temp, value, starts_with("X")) %>%
+    mutate(Date_temp = str_replace(Date_temp, "X", "")) %>%
+    mutate(Date = as.POSIXct(strptime(Date_temp, "%m.%d.%y"))) %>% 
+    mutate(Confirmed = value) %>% 
+    select(-value)
+
+d_US <- d_US_ts %>% 
+    gather(Date_temp, value, starts_with("X")) %>%
+    mutate(Date_temp = str_replace(Date_temp, "X", "")) %>%
+    mutate(Date = as.POSIXct(strptime(Date_temp, "%m.%d.%y")))
+
+all_US <- cbind(c_US, Deaths = d_US$value)
+
+# str(all_US)
+
+today <- max(all_US$Date)
+```
+
+```{r}
+today_map <- c_US %>% 
+    filter(Date == today)
+
+unique(today_map$Province_State)
+
+US_exclude <- c("American Samoa", "Guam", "Northern Mariana Islands", "Puerto Rico", "Virgin Islands", "Alaska", "Hawaii", "Diamond Princess", "Grand Princess")
+today_map_continous <- today_map %>% filter(!Province_State %in% US_exclude) %>% 
+    filter(Long_ != 0 & Lat != 0) %>% 
+    filter(Confirmed != 0)
+
+
+str(today_map_continous)
+
+```
+
+# Interactive bubble map with mapview. 
+
+```{r}
+
+
+today_map_sf <- st_as_sf(today_map_continous, coords = c("Long_", "Lat"), crs = 4326)
+str(today_map_sf)
+
+cex <- sqrt(today_map_sf$Confirmed)/10
+confirmed <- mapview(today_map_sf, grid = FALSE, cex = cex, alpha = 0.3)
+
+mapshot(confirmed, file = "US_Confirmed_bubble_mapview.png")
+mapshot(confirmed, url = "US_Confirmed_bubble_mapview.html")
+
+```
+
+# static bubble map with ggplot2. 
+
+```{r}
+
+# https://www.r-graph-gallery.com/330-bubble-map-with-ggplot2.html
+
+# get the US map from world
+library(maps)
+library(viridis)
+help(package = "maps")
+
+US_map <- map_data("state")
+
+p <- ggplot() + geom_polygon(data = US_map, aes(x = long, y = lat, group = group), fill = "grey", alpha = 0.3) +
+    geom_point(data = today_map_continous, aes(x = Long_, y = Lat, size = Confirmed, color = Confirmed)) +
+    # scale_size_continuous(trans = "log10") +
+    scale_color_viridis(trans = "log10") +
+    theme_void() + coord_map()
+
+p
+
+```
+
+# Interactive bubble map with plotly
+
+```{r}
+library(plotly)
+library(htmlwidgets)
+
+today_map_continous_ordered <- today_map_continous %>% 
+  arrange(Confirmed) %>% 
+  mutate(Combined_Key = factor(Combined_Key, unique(Combined_Key))) %>% 
+  mutate(mytext = paste("City, State, Country: ", Combined_Key, "\n", "Confirmed cases: ", Confirmed, sep = ""))
+
+p2 <- today_map_continous_ordered %>% 
+  ggplot() +
+  geom_polygon(data = US_map, aes(x = long, y = lat, group = group), fill = "grey", alpha = 0.3) +
+    geom_point(aes(x = Long_, y = Lat, size = Confirmed, color = Confirmed, text = mytext)) +
+    # scale_size_continuous(trans = "log10") +
+    scale_color_viridis(trans = "log10") +
+    theme_void() + coord_map()
+
+p2 <- ggplotly(p2, tooltip = "text")
+p2
+saveWidget(p2, file = paste0(getwd(), "/US_Confirmed_Bubble_plotly.html"))
+
+```
+
