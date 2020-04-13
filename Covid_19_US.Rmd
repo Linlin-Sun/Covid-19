@@ -113,6 +113,8 @@ today_map_sf <- st_as_sf(today_map_continous, coords = c("Long_", "Lat"), crs = 
 cex <- sqrt(today_map_sf$Confirmed)/10
 confirmed <- mapview(today_map_sf, grid = FALSE, cex = cex, alpha = 0.3)
 
+confirmed
+
 mapshot(confirmed, file = "US_Confirmed_bubble_mapview.png")
 mapshot(confirmed, url = "US_Confirmed_bubble_mapview.html")
 
@@ -176,10 +178,11 @@ library(tigris)
 library(tmap)
 us_geo <- tigris::states(class = "sf")
 # plot(st_geometry(us_geo))
-
+# str(us_geo)
 today_c_by_state <- today_map %>% group_by(Province_State) %>% 
   summarize(Confirmed = sum(Confirmed)) %>% 
-  ungroup()
+  ungroup() %>% 
+  mutate(Province_State = as.character(Province_State))
 
 combined <- inner_join(us_geo, today_c_by_state, by = c("NAME" = "Province_State"))
 # qtm(combined, fill = "Confirmed")
